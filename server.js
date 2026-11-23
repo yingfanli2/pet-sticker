@@ -19,6 +19,15 @@ http
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
         return res.end(await readFile(path.join(__dirname, 'index.html')));
       }
+      if (req.method === 'GET' && req.url === '/lib/prompts.js') {
+        res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8' });
+        return res.end(await readFile(path.join(__dirname, 'lib', 'prompts.js')));
+      }
+      if (req.method === 'GET' && req.url === '/config.js') {
+        // 本地測試走後端，不用瀏覽器直連的設定
+        res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8' });
+        return res.end('');
+      }
       if (req.method === 'POST' && req.url === '/api/sticker') {
         let raw = '';
         let size = 0;

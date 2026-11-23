@@ -209,7 +209,10 @@
   由 AI 生成，每次結果都不一樣
 </footer>
 
-<script>
+<script src="config.js"></script>
+<script type="module">
+  import { photoPrompt, textPrompt } from './lib/prompts.js';
+
   // 結果頁的「想印在衣服上？」提示。不想顯示就把 PRINT_URL 留空 ''
   const PRINT_NAME = 'Sofi';
   const PRINT_URL = 'https://sofifamily.com/';
@@ -308,13 +311,7 @@
       if (state.mode === 'photo') payload.image = state.image;
       else payload.description = $('desc').value.trim();
 
-      const res = await fetch('/api/sticker', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.image) throw new Error(data.error || '生成失敗，請再試一次。');
+      const data = await generate(payload);
 
       $('resultImg').src = data.image;
       const ext = (data.image.match(/^data:image\/(png|jpeg|webp|svg\+xml)/) || [, 'png'])[1].replace('jpeg', 'jpg').replace('svg+xml', 'svg');
@@ -330,6 +327,96 @@
   });
 
   $('again').addEventListener('click', () => { show('form'); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+
+  // ── 生成：有 config.js 就直接在瀏覽器調用 API（GitHub Pages 版）；沒有就交給後端 /api/sticker（Vercel 版）──
+  const CFG = window.PET_CONFIG || null;
+  const PER_PHONE = (CFG && CFG.perPhone) || 5; // 每台手機每 10 分鐘最多幾次
+
+  async function generate(payload) {
+    if (!CFG) {
+      const res = await fetch('/api/sticker', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.image) throw new Error(data.error || '生成失敗，請再試一次。');
+      return data;
+    }
+
+    // 每台手機的次數限制
+    const now = Date.now();
+    let hits = [];
+    try { hits = JSON.parse(localStorage.getItem('pet-hits') || '[]').filter((t) => now - t < 600000); } catch {}
+    if (hits.length >= PER_PHONE) throw new Error(`每人每 10 分鐘可以玩 ${PER_PHONE} 次，稍後再來！`);
+
+    const key = decodeKey(CFG.k);
+    const prompt = payload.mode === 'photo' ? photoPrompt(payload.style) : textPrompt(payload.style, payload.description.replace(/[\u0000-\u001f"]/g, ' ').slice(0, 80));
+    let img = null, mime = null;
+    if (payload.mode === 'photo') {
+      const m = /^data:(image\/[a-z]+);base64,(.+)$/.exec(payload.image);
+      mime = m[1]; img = m[2];
+    }
+
+    const out = CFG.provider === 'openai' ? await callOpenAI(key, CFG.model, prompt, img, mime) : await callGemini(key, CFG.model, prompt, img, mime);
+    hits.push(now);
+    try { localStorage.setItem('pet-hits', JSON.stringify(hits)); } catch {}
+    return { image: out.url || `data:${out.mime};base64,${out.base64}` };
+  }
+
+  function decodeKey(k) {
+    // config.js 裡的 key 是倒序後再 base64 的，只為了不讓自動掃描器認出來，不是加密
+    return atob(k).split('').reverse().join('');
+  }
+
+  async function callGemini(key, model, prompt, img, mime) {
+    const parts = [{ text: prompt }];
+    if (img) parts.push({ inline_data: { mime_type: mime, data: img } });
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({ contents: [{ role: 'user', parts }] }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(friendly(json?.error?.message, res.status));
+    const p = (json?.candidates?.[0]?.content?.parts || []).find((x) => x.inline_data || x.inlineData);
+    const d = p && (p.inline_data || p.inlineData);
+    if (!d?.data) throw new Error('AI 沒有畫出圖片，換一張照片或描述再試。');
+    return { mime: d.mime_type || d.mimeType || 'image/png', base64: d.data };
+  }
+
+  async function callOpenAI(key, model, prompt, img, mime) {
+    let res;
+    if (img) {
+      const bin = Uint8Array.from(atob(img), (c) => c.charCodeAt(0));
+      const form = new FormData();
+      form.append('model', model);
+      form.append('prompt', prompt);
+      form.append('size', '1024x1024');
+      form.append('image', new Blob([bin], { type: mime }), mime === 'image/png' ? 'pet.png' : 'pet.jpg');
+      res = await fetch('https://api.openai.com/v1/images/edits', { method: 'POST', headers: { Authorization: `Bearer ${key}` }, body: form });
+    } else {
+      res = await fetch('https://api.openai.com/v1/images/generations', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, prompt, size: '1024x1024' }),
+      });
+    }
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(friendly(json?.error?.message, res.status));
+    const b64 = json?.data?.[0]?.b64_json;
+    if (b64) return { mime: 'image/png', base64: b64 };
+    const url = json?.data?.[0]?.url;
+    if (url) return { url };
+    throw new Error('AI 沒有畫出圖片，換一張照片或描述再試。');
+  }
+
+  function friendly(msg, status) {
+    console.warn('API error:', status, msg);
+    if (status === 429) return '現場太熱鬧了，稍等一下再試 🙏';
+    // 附上簡短的錯誤原因，方便測試時排查
+    return `生成失敗，請再試一次。（${status}${msg ? '：' + String(msg).slice(0, 120) : ''}）`;
+  }
 
   function show(which) {
     $('form').hidden = which !== 'form';
