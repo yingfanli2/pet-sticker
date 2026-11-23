@@ -1,0 +1,11 @@
+{
+  "name": "pet-sticker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "AI 寵物貼圖機：講座現場給觀眾掃碼玩的網站",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "dev": "node server.js"
+  }
+}

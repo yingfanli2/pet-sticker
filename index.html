@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-HK">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AI 寵物貼圖機</title>
+<meta name="theme-color" content="#2443D6">
+<style>
+  :root {
+    --blue: #2443D6;
+    --green: #1E3A2B;
+    --cream: #F7F3EA;
+    --paper: #FFFDF8;
+    --ink: #171B26;
+    --muted: #5A6070;
+    --orange: #F2A541;
+    --line: #E4DDCD;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: "Noto Sans TC", "PingFang HK", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+    background: var(--cream);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  .hero {
+    background: var(--blue);
+    color: var(--cream);
+    padding: calc(20px + env(safe-area-inset-top)) 22px 64px;
+    border-radius: 0 0 32px 32px;
+  }
+  .brand { display: flex; align-items: center; justify-content: space-between; }
+  .wordmark { font-weight: 900; font-size: 20px; }
+  .pill { font-size: 13px; font-weight: 700; background: rgba(247,243,234,.16); padding: 6px 12px; border-radius: 999px; }
+  .hero h1 { font-size: 32px; line-height: 1.2; margin: 28px 0 10px; font-weight: 900; }
+  .hero p { margin: 0; font-size: 16px; line-height: 1.6; color: #DCE2FA; }
+
+  main { max-width: 520px; margin: -40px auto 0; padding: 0 16px 40px; }
+  .card {
+    background: var(--paper); border: 1.5px solid var(--line); border-radius: 24px;
+    padding: 20px; margin-bottom: 16px; box-shadow: 0 6px 24px rgba(23,27,38,.06);
+  }
+  .step { font-size: 13px; font-weight: 800; color: var(--blue); letter-spacing: .06em; margin: 0 0 12px; }
+
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: #EFE9DC; padding: 6px; border-radius: 16px; }
+  .tab {
+    border: 0; background: transparent; padding: 12px 8px; border-radius: 12px; font: inherit;
+    font-size: 15px; font-weight: 700; color: var(--muted); cursor: pointer;
+  }
+  .tab[aria-selected="true"] { background: var(--paper); color: var(--ink); box-shadow: 0 2px 8px rgba(23,27,38,.08); }
+
+  .panel { margin-top: 16px; }
+  .drop {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    min-height: 200px; border: 2px dashed #C9C1AE; border-radius: 20px; background: #FAF6EE;
+    cursor: pointer; text-align: center; padding: 16px; position: relative; overflow: hidden;
+  }
+  .drop strong { font-size: 17px; }
+  .drop span { font-size: 14px; color: var(--muted); }
+  .drop img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .drop .change {
+    position: absolute; right: 10px; bottom: 10px; z-index: 2; background: rgba(23,27,38,.75); color: #fff;
+    font-size: 13px; padding: 6px 12px; border-radius: 999px;
+  }
+  .paw { width: 44px; height: 44px; }
+  input[type=file] { display: none; }
+
+  textarea {
+    width: 100%; min-height: 110px; resize: vertical; font: inherit; font-size: 16px; line-height: 1.5;
+    padding: 14px 16px; border-radius: 16px; border: 1.5px solid var(--line); background: #FAF6EE; color: var(--ink);
+  }
+  textarea:focus { outline: 2px solid var(--blue); outline-offset: 1px; }
+  .count { text-align: right; font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .ideas { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .idea {
+    border: 1.5px solid var(--line); background: var(--paper); border-radius: 999px; padding: 8px 12px;
+    font: inherit; font-size: 13px; color: var(--ink); cursor: pointer;
+  }
+
+  .styles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .style {
+    border: 2px solid var(--line); background: var(--paper); border-radius: 16px; padding: 14px 6px;
+    font: inherit; font-size: 15px; font-weight: 700; color: var(--ink); cursor: pointer;
+  }
+  .style[aria-pressed="true"] { border-color: var(--blue); background: #EEF1FD; color: var(--blue); }
+
+  .go {
+    width: 100%; border: 0; border-radius: 18px; padding: 18px; font: inherit; font-size: 18px; font-weight: 900;
+    background: var(--green); color: var(--cream); cursor: pointer;
+  }
+  .go:disabled { opacity: .5; cursor: not-allowed; }
+  .error { color: #B4232A; font-size: 14px; margin: 10px 2px 0; min-height: 1em; }
+
+  .loading { text-align: center; padding: 28px 12px; }
+  .spinner {
+    width: 56px; height: 56px; margin: 0 auto 16px; border-radius: 50%;
+    border: 6px solid #E4E8FB; border-top-color: var(--blue); animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading p { margin: 0; font-weight: 700; }
+  .loading small { display: block; margin-top: 6px; color: var(--muted); }
+
+  .result img {
+    width: 100%; aspect-ratio: 1; object-fit: contain; border-radius: 20px;
+    background: repeating-conic-gradient(#F3EEE3 0 25%, #FBF8F1 0 50%) 0 0 / 24px 24px;
+  }
+  .result h2 { font-size: 22px; margin: 16px 0 6px; }
+  .result p { margin: 0 0 16px; color: var(--muted); font-size: 15px; line-height: 1.6; }
+  .btns { display: grid; gap: 10px; }
+  .btn {
+    display: block; text-align: center; text-decoration: none; border-radius: 16px; padding: 16px; font-weight: 800;
+    font-size: 16px; border: 0; font-family: inherit; cursor: pointer;
+  }
+  .btn.primary { background: var(--blue); color: var(--cream); }
+  .btn.secondary { background: #EFE9DC; color: var(--ink); }
+  .btn.ghost { background: transparent; color: var(--muted); font-weight: 700; }
+  .howto { margin: 14px 0 0; padding: 14px 16px; background: #FAF6EE; border-radius: 16px; font-size: 14px; line-height: 1.7; color: var(--muted); }
+  .howto b { color: var(--ink); }
+  .howto a { color: var(--blue); font-weight: 700; }
+
+  footer { text-align: center; font-size: 12px; color: var(--muted); line-height: 1.7; padding: 8px 16px 32px; }
+  footer a { color: var(--blue); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="brand">
+    <span class="wordmark">寵物貼圖機</span>
+    <span class="pill">AI 現場互動</span>
+  </div>
+  <h1>把你的毛孩<br>變成一張貼圖</h1>
+  <p>上傳一張寵物照片，或者描述一隻你最喜歡的動物，AI 會幫你畫成專屬貼圖。</p>
+</header>
+
+<main>
+  <!-- 輸入 -->
+  <section id="form">
+    <div class="card">
+      <p class="step">STEP 1 · 選一種玩法</p>
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tab-photo" aria-selected="true" aria-controls="panel-photo">上傳寵物照片</button>
+        <button class="tab" role="tab" id="tab-text" aria-selected="false" aria-controls="panel-text">描述一隻動物</button>
+      </div>
+
+      <div class="panel" id="panel-photo" role="tabpanel">
+        <label class="drop" id="drop">
+          <svg class="paw" viewBox="0 0 64 64" aria-hidden="true"><g fill="#2443D6"><ellipse cx="18" cy="24" rx="6" ry="8"/><ellipse cx="32" cy="16" rx="6" ry="8"/><ellipse cx="46" cy="24" rx="6" ry="8"/><path d="M32 30c-9 0-17 10-17 18 0 6 5 8 9 7 4-1 5-3 8-3s4 2 8 3c4 1 9-1 9-7 0-8-8-18-17-18z"/></g></svg>
+          <strong>點這裡選照片</strong>
+          <span>正面、清楚、只有一隻寵物效果最好</span>
+          <input type="file" id="file" accept="image/*">
+        </label>
+      </div>
+
+      <div class="panel" id="panel-text" role="tabpanel" hidden>
+        <textarea id="desc" maxlength="80" placeholder="例如：一隻戴墨鏡的橘色胖貓，正在吃菠蘿包"></textarea>
+        <div class="count"><span id="count">0</span> / 80</div>
+        <div class="ideas">
+          <button class="idea" type="button">舉啞鈴的柯基</button>
+          <button class="idea" type="button">穿和服的柴犬在喝茶</button>
+          <button class="idea" type="button">戴耳機的熊貓 DJ</button>
+          <button class="idea" type="button">很不屑的三花貓</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="step">STEP 2 · 選畫風</p>
+      <div class="styles">
+        <button class="style" type="button" data-style="quirky" aria-pressed="true">搞怪手繪</button>
+        <button class="style" type="button" data-style="japanese" aria-pressed="false">日式可愛</button>
+        <button class="style" type="button" data-style="street" aria-pressed="false">街頭塗鴉</button>
+      </div>
+    </div>
+
+    <button class="go" id="go" disabled>生成我的貼圖</button>
+    <p class="error" id="error" role="alert"></p>
+  </section>
+
+  <!-- 生成中 -->
+  <section id="loading" class="card loading" hidden>
+    <div class="spinner"></div>
+    <p id="loadingText">AI 正在拿起畫筆……</p>
+    <small>大約 20–40 秒，請不要關掉這頁</small>
+  </section>
+
+  <!-- 結果 -->
+  <section id="result" class="card result" hidden>
+    <img id="resultImg" alt="AI 生成的寵物貼圖">
+    <h2>你的專屬貼圖完成了！</h2>
+    <p>存到手機，拿去做頭像、發給朋友都可以。</p>
+    <div class="btns">
+      <a class="btn primary" id="download" download="pet-sticker.png">儲存貼圖</a>
+      <button class="btn ghost" id="again" type="button">再玩一次</button>
+    </div>
+    <div class="howto" id="print" hidden>
+      <b>想印在衣服上？</b><br>
+      1. 先按「儲存貼圖」存到手機<br>
+      2. 打開 <a id="printLink" href="#" target="_blank" rel="noopener"><span id="printName"></span></a>，選一件 T 恤<br>
+      3. 在設計頁上傳你的貼圖
+    </div>
+  </section>
+</main>
+
+<footer>
+  照片只用來即時生成貼圖，不會被保存。<br>
+  由 AI 生成，每次結果都不一樣
+</footer>
+
+<script>
+  // 結果頁的「想印在衣服上？」提示。不想顯示就把 PRINT_URL 留空 ''
+  const PRINT_NAME = 'Sofi';
+  const PRINT_URL = 'https://sofifamily.com/';
+
+  const $ = (id) => document.getElementById(id);
+  const state = { mode: 'photo', style: 'quirky', image: null };
+  if (PRINT_URL) {
+    $('print').hidden = false;
+    $('printLink').href = PRINT_URL;
+    $('printName').textContent = PRINT_NAME;
+  }
+
+  // 玩法切換
+  for (const tab of document.querySelectorAll('.tab')) {
+    tab.addEventListener('click', () => {
+      state.mode = tab.id === 'tab-photo' ? 'photo' : 'text';
+      document.querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-selected', String(t === tab)));
+      $('panel-photo').hidden = state.mode !== 'photo';
+      $('panel-text').hidden = state.mode !== 'text';
+      refresh();
+    });
+  }
+
+  // 畫風
+  for (const b of document.querySelectorAll('.style')) {
+    b.addEventListener('click', () => {
+      state.style = b.dataset.style;
+      document.querySelectorAll('.style').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    });
+  }
+
+  // 選照片：在手機上先縮細到 1024px 再上傳，速度更快，也會去掉照片裡的位置資料
+  $('file').addEventListener('change', async (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    $('error').textContent = '';
+    try {
+      state.image = await shrink(f, 1024);
+      const drop = $('drop');
+      drop.querySelectorAll('img,.change').forEach((n) => n.remove());
+      const img = new Image();
+      img.src = state.image;
+      img.alt = '你選的照片';
+      const tag = document.createElement('span');
+      tag.className = 'change';
+      tag.textContent = '換一張';
+      drop.append(img, tag);
+    } catch {
+      state.image = null;
+      $('error').textContent = '這張照片打不開，換一張試試（JPG / PNG）。';
+    }
+    refresh();
+  });
+
+  function shrink(file, max) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const s = Math.min(1, max / Math.max(img.width, img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.width * s);
+        c.height = Math.round(img.height * s);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        resolve(c.toDataURL('image/jpeg', 0.88));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('bad image')); };
+      img.src = url;
+    });
+  }
+
+  // 文字描述
+  $('desc').addEventListener('input', () => { $('count').textContent = $('desc').value.length; refresh(); });
+  for (const b of document.querySelectorAll('.idea')) {
+    b.addEventListener('click', () => { $('desc').value = b.textContent; $('count').textContent = b.textContent.length; refresh(); });
+  }
+
+  function refresh() {
+    $('go').disabled = state.mode === 'photo' ? !state.image : $('desc').value.trim().length < 2;
+  }
+
+  // 生成
+  const lines = ['AI 正在拿起畫筆……', '正在研究毛孩的招牌表情……', '幫牠加一點搞怪……', '描上白色貼紙邊……', '差一點點就好！'];
+  let ticker;
+
+  $('go').addEventListener('click', async () => {
+    $('error').textContent = '';
+    show('loading');
+    let i = 0;
+    $('loadingText').textContent = lines[0];
+    ticker = setInterval(() => { i = Math.min(i + 1, lines.length - 1); $('loadingText').textContent = lines[i]; }, 6000);
+
+    try {
+      const payload = { mode: state.mode, style: state.style };
+      if (state.mode === 'photo') payload.image = state.image;
+      else payload.description = $('desc').value.trim();
+
+      const res = await fetch('/api/sticker', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.image) throw new Error(data.error || '生成失敗，請再試一次。');
+
+      $('resultImg').src = data.image;
+      const ext = (data.image.match(/^data:image\/(png|jpeg|webp|svg\+xml)/) || [, 'png'])[1].replace('jpeg', 'jpg').replace('svg+xml', 'svg');
+      $('download').href = data.image;
+      $('download').download = `pet-sticker.${ext}`;
+      show('result');
+    } catch (err) {
+      show('form');
+      $('error').textContent = err.message;
+    } finally {
+      clearInterval(ticker);
+    }
+  });
+
+  $('again').addEventListener('click', () => { show('form'); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+
+  function show(which) {
+    $('form').hidden = which !== 'form';
+    $('loading').hidden = which !== 'loading';
+    $('result').hidden = which !== 'result';
+    if (which !== 'form') $(which).scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+</script>
+</body>
+</html>
